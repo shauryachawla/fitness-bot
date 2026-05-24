@@ -1,11 +1,39 @@
 import json
 import time
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import PlainTextResponse
 from mangum import Mangum
 from google_health_client import log_workout_to_google_health
 from hevy_client import fetch_workout
+from slack_client import post_workout_to_slack, post_message_to_slack
 
 app = FastAPI(title="Hevy to Google Health Sync Webhook")
+
+@app.post("/messages")
+async def receive_message(request: Request):
+    """
+    Slack Events API endpoint.
+    Handles the one-time url_verification handshake and any future event callbacks.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    event_type = payload.get("type")
+    print(json.dumps({
+        "event": "slack.event_received",
+        "type": event_type,
+        "payload": payload,
+    }))
+
+    # Slack url_verification handshake — echo the challenge back as plain text.
+    if event_type == "url_verification":
+        return PlainTextResponse(content=payload.get("challenge", ""))
+
+    # event_callback or anything else — acknowledge with 200 so Slack doesn't retry.
+    
+    return {"ok": True}
 
 @app.post("/webhook")
 async def hevy_webhook(request: Request):
@@ -58,7 +86,28 @@ async def hevy_webhook(request: Request):
             "workout_title": workout_title,
             "duration_ms": duration_ms,
         }))
-        return {"status": "success", "google_health_response": result}
+
+        slack_response = None
+        try:
+            slack_response = post_workout_to_slack(workout)
+            print(json.dumps({
+                "event": "slack.post_success",
+                "workout_id": workout_id,
+                "slack_ts": slack_response.get("ts"),
+                "slack_channel": slack_response.get("channel"),
+            }))
+        except Exception as slack_err:
+            print(json.dumps({
+                "event": "slack.post_error",
+                "workout_id": workout_id,
+                "error": str(slack_err),
+            }))
+
+        return {
+            "status": "success",
+            "google_health_response": result,
+            "slack_posted": bool(slack_response and slack_response.get("ok")),
+        }
     except Exception as e:
         duration_ms = round((time.monotonic() - start) * 1000)
         print(json.dumps({

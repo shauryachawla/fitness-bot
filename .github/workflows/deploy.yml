@@ -1,0 +1,54 @@
+name: Deploy to AWS Lambda
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-2
+
+      - name: SAM build
+        run: sam build
+
+      - name: SAM deploy
+        run: |
+          sam deploy \
+            --stack-name fitsync \
+            --region ap-south-2 \
+            --resolve-s3 \
+            --s3-prefix fitsync \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              GoogleClientId="${{ secrets.GOOGLE_CLIENT_ID }}" \
+              GoogleClientSecret="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+              SsmParameterName="/fitsync/google_health_refresh_token" \
+              HevyApiKey="${{ secrets.HEVY_API_KEY }}" \
+              SlackBotToken="${{ secrets.SLACK_BOT_TOKEN }}" \
+              SlackChannel="${{ secrets.SLACK_CHANNEL }}"

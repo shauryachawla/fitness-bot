@@ -20,6 +20,13 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Your Hevy API key for fetching workout details
+  SlackBotToken:
+    Type: String
+    NoEcho: true
+    Description: Slack bot user OAuth token (xoxb-...) with chat:write
+  SlackChannel:
+    Type: String
+    Description: Slack channel ID or name (e.g. C0123456789 or #workouts) to post summaries to
 
 Resources:
   FitSyncFunction:
@@ -37,6 +44,8 @@ Resources:
           GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
           SSM_PARAMETER_NAME: !Ref SsmParameterName
           HEVY_API_KEY: !Ref HevyApiKey
+          SLACK_BOT_TOKEN: !Ref SlackBotToken
+          SLACK_CHANNEL: !Ref SlackChannel
       Policies:
         # Give the Lambda function permission to read and update the parameter
         - Version: '2012-10-17'
