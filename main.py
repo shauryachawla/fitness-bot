@@ -33,7 +33,7 @@ async def receive_message(request: Request):
 
     # event_callback or anything else — acknowledge with 200 so Slack doesn't retry.
     
-    return {"ok": True}
+    post_message_to_slack(f"Received Slack event of type: {event_type}")
 
 @app.post("/webhook")
 async def hevy_webhook(request: Request):
