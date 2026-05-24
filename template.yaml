@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  fitsync
+  
+  AWS Lambda function that syncs Hevy workouts to Google Health.
+
+Parameters:
+  GoogleClientId:
+    Type: String
+    Description: Your Google Cloud OAuth Client ID
+  GoogleClientSecret:
+    Type: String
+    Description: Your Google Cloud OAuth Client Secret
+  SsmParameterName:
+    Type: String
+    Default: /fitsync/google_health_refresh_token
+    Description: The AWS SSM Parameter Store key where the refresh token is kept
+  HevyApiKey:
+    Type: String
+    NoEcho: true
+    Description: Your Hevy API key for fetching workout details
+
+Resources:
+  FitSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: main.handler
+      Runtime: python3.14
+      Architectures:
+        - x86_64
+      Timeout: 30
+      Environment:
+        Variables:
+          GOOGLE_CLIENT_ID: !Ref GoogleClientId
+          GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
+          SSM_PARAMETER_NAME: !Ref SsmParameterName
+          HEVY_API_KEY: !Ref HevyApiKey
+      Policies:
+        # Give the Lambda function permission to read and update the parameter
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:PutParameter
+              Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterName}'
+      Events:
+        WebhookEvent:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  FitSyncApi:
+    Description: "API Gateway endpoint URL for Prod environment"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/webhook"
+  FitSyncFunctionArn:
+    Description: "FitSync Lambda Function ARN"
+    Value: !GetAtt FitSyncFunction.Arn
