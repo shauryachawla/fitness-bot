@@ -27,3 +27,30 @@ def fetch_workout(workout_id: str) -> dict:
         )
 
     return response.json()
+
+
+def list_recent_workouts(limit: int = 10) -> list[dict]:
+    """Fetch the user's most recent workouts. Requires Hevy Pro."""
+    if not HEVY_API_KEY:
+        raise ValueError("HEVY_API_KEY environment variable is not set")
+
+    url = f"{HEVY_API_BASE_URL}/workouts"
+    headers = {
+        "api-key": HEVY_API_KEY,
+        "Accept": "application/json",
+    }
+    params = {"page": 1, "pageSize": limit}
+
+    response = requests.get(url, headers=headers, params=params)
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Hevy API error listing workouts: "
+            f"{response.status_code} - {response.text}"
+        )
+
+    body = response.json()
+    workouts = body.get("workouts") if isinstance(body, dict) else body
+    if not isinstance(workouts, list):
+        return []
+    return workouts[:limit]

@@ -52,4 +52,6 @@ jobs:
               SsmParameterName="/fitsync/google_health_refresh_token" \
               HevyApiKey="${{ secrets.HEVY_API_KEY }}" \
               SlackBotToken="${{ secrets.SLACK_BOT_TOKEN }}" \
-              SlackChannel="${{ secrets.SLACK_CHANNEL }}"
+              SlackChannel="${{ secrets.SLACK_CHANNEL }}" \
+              AnthropicApiKey="${{ secrets.ANTHROPIC_API_KEY }}" \
+              GoalSsmParameterName="/fitsync/goal"

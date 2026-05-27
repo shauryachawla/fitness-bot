@@ -1,0 +1,13 @@
+{
+  "version": "0",
+  "id": "00000000-0000-0000-0000-000000000000",
+  "detail-type": "Scheduled Event",
+  "source": "aws.events",
+  "account": "123456789012",
+  "time": "2026-05-29T14:30:00Z",
+  "region": "ap-south-2",
+  "resources": [
+    "arn:aws:events:ap-south-2:123456789012:rule/fitsync-DebriefFunctionWeeklySchedule"
+  ],
+  "detail": {}
+}

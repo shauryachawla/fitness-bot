@@ -138,6 +138,38 @@ def post_message_to_slack(text: str) -> dict:
     return data
 
 
+def post_debrief_to_slack(debrief_text: str, goal: str) -> dict:
+    """Post a weekly Claude-generated debrief to the configured Slack channel."""
+    if not SLACK_BOT_TOKEN:
+        raise ValueError("SLACK_BOT_TOKEN environment variable is not set")
+    if not SLACK_CHANNEL:
+        raise ValueError("SLACK_CHANNEL environment variable is not set")
+
+    blocks = [
+        {"type": "header", "text": {"type": "plain_text", "text": "📊 Weekly debrief", "emoji": True}},
+        {"type": "context", "elements": [{"type": "mrkdwn", "text": f"*Goal:* {goal}"}]},
+        {"type": "divider"},
+        {"type": "section", "text": {"type": "mrkdwn", "text": debrief_text[:2900]}},
+    ]
+    fallback = "Weekly debrief"
+
+    payload = {"channel": SLACK_CHANNEL, "text": fallback, "blocks": blocks}
+    headers = {
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+
+    response = requests.post(SLACK_API_URL, headers=headers, json=payload)
+    if response.status_code != 200:
+        raise Exception(
+            f"Slack API HTTP error: {response.status_code} - {response.text}"
+        )
+    data = response.json()
+    if not data.get("ok"):
+        raise Exception(f"Slack API error: {data.get('error')} - {data}")
+    return data
+
+
 def post_workout_to_slack(workout: dict) -> dict:
     """Post a formatted workout summary to a Slack channel via chat.postMessage."""
     if not SLACK_BOT_TOKEN:

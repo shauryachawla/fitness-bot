@@ -18,6 +18,7 @@ SSM_PARAMETER_NAME = os.environ.get("SSM_PARAMETER_NAME", "/fitsync/google_healt
 SCOPES = " ".join([
     "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.writeonly",
     "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
+    "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
 ])
 
 if not CLIENT_ID or not CLIENT_SECRET:

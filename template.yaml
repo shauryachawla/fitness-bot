@@ -27,6 +27,14 @@ Parameters:
   SlackChannel:
     Type: String
     Description: Slack channel ID or name (e.g. C0123456789 or #workouts) to post summaries to
+  AnthropicApiKey:
+    Type: String
+    NoEcho: true
+    Description: Anthropic API key for Claude weekly debrief
+  GoalSsmParameterName:
+    Type: String
+    Default: /fitsync/goal
+    Description: SSM parameter name storing the user's current fitness goal
 
 Resources:
   FitSyncFunction:
@@ -61,6 +69,44 @@ Resources:
           Properties:
             Path: /{proxy+}
             Method: ANY
+
+  DebriefFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: debrief.handler
+      Runtime: python3.14
+      Architectures:
+        - x86_64
+      Timeout: 60
+      Environment:
+        Variables:
+          GOOGLE_CLIENT_ID: !Ref GoogleClientId
+          GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
+          SSM_PARAMETER_NAME: !Ref SsmParameterName
+          HEVY_API_KEY: !Ref HevyApiKey
+          SLACK_BOT_TOKEN: !Ref SlackBotToken
+          SLACK_CHANNEL: !Ref SlackChannel
+          ANTHROPIC_API_KEY: !Ref AnthropicApiKey
+          GOAL_SSM_PARAMETER_NAME: !Ref GoalSsmParameterName
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:PutParameter
+              Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterName}'
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoalSsmParameterName}'
+      Events:
+        WeeklySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(30 15 ? * FRI *)
+            Description: Friday 15:30 UTC (9pm IST) weekly Claude debrief
 
 Outputs:
   FitSyncApi:

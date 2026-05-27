@@ -124,3 +124,52 @@ def log_workout_to_google_health(hevy_workout):
         
     print("Successfully logged workout to Google Health.")
     return response.json()
+
+
+# Google Health API v4 read endpoints. Two footguns:
+#   1) Kebab/snake-case mismatch — the dataType in the URL path is kebab-case
+#      ("heart-rate-variability") while the field in the filter is snake_case
+#      ("heart_rate_variability").
+#   2) The filter field path depends on the record SHAPE, not the field name:
+#         - Sample records  → "<type>.sample_time.physical_time >= <ISO timestamp>"
+#         - Daily summaries → "<type>.date >= <YYYY-MM-DD>"   (date, not timestamp)
+#         - Interval records→ "<type>.interval.start_time >= <ISO>"
+# Sending the wrong shape returns 400 INVALID_DATA_POINT_FILTER_DATA_TYPE_MEMBER.
+_BIOMETRIC_DATA_TYPES = {
+    "weight":             ("weight",                   "weight.sample_time.physical_time",                   "iso"),
+    "resting_heart_rate": ("daily-resting-heart-rate", "daily_resting_heart_rate.date",                      "date"),
+    "hrv":                ("heart-rate-variability",   "heart_rate_variability.sample_time.physical_time",   "iso"),
+}
+
+
+def _fetch_data_points(access_token: str, data_type_path: str, filter_lhs: str, since_value: str) -> list:
+    url = f"https://health.googleapis.com/v4/users/me/dataTypes/{data_type_path}/dataPoints"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    params = {"filter": f'{filter_lhs} >= "{since_value}"'}
+
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code != 200:
+        print(json.dumps({
+            "event": "google_health.read_error",
+            "data_type": data_type_path,
+            "status": response.status_code,
+            "body": response.text[:500],
+        }))
+        return []
+
+    body = response.json()
+    return body.get("dataPoints", []) if isinstance(body, dict) else []
+
+
+def fetch_biometrics(days: int = 7) -> dict:
+    """Fetch weight, resting heart rate, and HRV data points from the last N days."""
+    access_token = refresh_google_token()
+    since_dt = datetime.now(timezone.utc) - timedelta(days=days)
+    since_iso = since_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    since_date = since_dt.strftime("%Y-%m-%d")
+
+    result = {}
+    for key, (path, filter_lhs, value_type) in _BIOMETRIC_DATA_TYPES.items():
+        bound = since_date if value_type == "date" else since_iso
+        result[key] = _fetch_data_points(access_token, path, filter_lhs, bound)
+    return result
