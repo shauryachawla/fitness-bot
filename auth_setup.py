@@ -13,8 +13,12 @@ CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 REDIRECT_URI = "http://127.0.0.1:8082/callback"
 SSM_PARAMETER_NAME = os.environ.get("SSM_PARAMETER_NAME", "/fitsync/google_health_refresh_token")
 
-# Use the Google Health API scope
-SCOPES = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness"
+# Google Health API granular scopes — writeonly is required to log workouts.
+# Include readonly too so the same token can also fetch existing data if needed.
+SCOPES = " ".join([
+    "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.writeonly",
+    "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
+])
 
 if not CLIENT_ID or not CLIENT_SECRET:
     print("Error: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set in .env")

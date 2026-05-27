@@ -1,7 +1,9 @@
 import json
 import time
+from typing import Any, Optional
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field
 from mangum import Mangum
 from google_health_client import log_workout_to_google_health
 from hevy_client import fetch_workout
@@ -9,31 +11,57 @@ from slack_client import post_workout_to_slack, post_message_to_slack
 
 app = FastAPI(title="Hevy to Google Health Sync Webhook")
 
+class SlackEvent(BaseModel):
+    """Slack Events API payload. Fields are optional because the shape varies by event type."""
+    type: str = Field(..., description="Event type, e.g. 'url_verification' or 'event_callback'")
+    token: Optional[str] = Field(None, description="(deprecated) verification token")
+    challenge: Optional[str] = Field(None, description="Challenge string sent during url_verification")
+    team_id: Optional[str] = None
+    api_app_id: Optional[str] = None
+    event: Optional[dict[str, Any]] = Field(None, description="Inner event object for event_callback")
+    event_id: Optional[str] = None
+    event_time: Optional[int] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "type": "url_verification",
+                    "token": "Jhj5dZrVaK7ZwHHjRyZWjbDl",
+                    "challenge": "3eZbrw1aBm2rZgRNFdxV2595E9CY3gmdALWMmHkvFXO7tYXAYM8P",
+                },
+                {
+                    "type": "event_callback",
+                    "team_id": "T0123456789",
+                    "api_app_id": "A0123456789",
+                    "event": {"type": "message", "text": "hello", "user": "U123", "channel": "C123"},
+                    "event_id": "Ev0123456789",
+                    "event_time": 1700000000,
+                },
+            ]
+        }
+    }
+
+
 @app.post("/messages")
-async def receive_message(request: Request):
+async def receive_message(payload: SlackEvent):
     """
     Slack Events API endpoint.
     Handles the one-time url_verification handshake and any future event callbacks.
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
-
-    event_type = payload.get("type")
     print(json.dumps({
         "event": "slack.event_received",
-        "type": event_type,
-        "payload": payload,
+        "type": payload.type,
+        "payload": payload.model_dump(exclude_none=True),
     }))
 
     # Slack url_verification handshake — echo the challenge back as plain text.
-    if event_type == "url_verification":
-        return PlainTextResponse(content=payload.get("challenge", ""))
+    if payload.type == "url_verification":
+        return PlainTextResponse(content=payload.challenge or "")
 
     # event_callback or anything else — acknowledge with 200 so Slack doesn't retry.
-    
-    post_message_to_slack(f"Received Slack event of type: {event_type}")
+    post_message_to_slack("message aya hai")
+    return {"ok": True}
 
 @app.post("/webhook")
 async def hevy_webhook(request: Request):
