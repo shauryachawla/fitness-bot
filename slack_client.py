@@ -138,6 +138,28 @@ def post_message_to_slack(text: str) -> dict:
     return data
 
 
+def post_agent_reply(text: str, channel: str, thread_ts: str) -> dict:
+    """Post an agent reply into a specific Slack thread."""
+    if not SLACK_BOT_TOKEN:
+        raise ValueError("SLACK_BOT_TOKEN environment variable is not set")
+
+    payload = {"channel": channel, "text": text, "thread_ts": thread_ts}
+    headers = {
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+
+    response = requests.post(SLACK_API_URL, headers=headers, json=payload)
+    if response.status_code != 200:
+        raise Exception(
+            f"Slack API HTTP error: {response.status_code} - {response.text}"
+        )
+    data = response.json()
+    if not data.get("ok"):
+        raise Exception(f"Slack API error: {data.get('error')} - {data}")
+    return data
+
+
 def post_debrief_to_slack(debrief_text: str, goal: str) -> dict:
     """Post a weekly Claude-generated debrief to the configured Slack channel."""
     if not SLACK_BOT_TOKEN:

@@ -69,3 +69,42 @@ def weekly_debrief(goal: str, workouts: list[dict], biometrics: dict) -> str:
     )
 
     return "".join(block.text for block in response.content if block.type == "text")
+
+
+_AGENT_PERSONA = (
+    "You are FitSync, a personal strength-and-conditioning assistant. "
+    "Answer the user's specific question using their real data. "
+    "Be direct and numbers-forward. Target ~150 words. "
+    "Format: Slack mrkdwn (*bold*, _italics_). No preamble, no sign-off."
+)
+
+
+def fitness_agent(question: str, goal: str, workouts: list[dict], biometrics: dict) -> str:
+    if not ANTHROPIC_API_KEY:
+        raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    user_content = (
+        f"Question: {question}\n\n"
+        f"Recent workouts (most recent first, up to 10):\n"
+        f"{json.dumps(workouts, default=str)}\n\n"
+        f"Biometrics from the last 7 days (weight, resting_heart_rate, hrv, sleep):\n"
+        f"{json.dumps(biometrics, default=str)}"
+    )
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=800,
+        system=[
+            {"type": "text", "text": _AGENT_PERSONA},
+            {
+                "type": "text",
+                "text": f"User's current fitness goal:\n{goal}",
+                "cache_control": {"type": "ephemeral"},
+            },
+        ],
+        messages=[{"role": "user", "content": user_content}],
+    )
+
+    return "".join(block.text for block in response.content if block.type == "text")

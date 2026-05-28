@@ -1,13 +1,23 @@
 import json
+import os
+import re
 import time
 from typing import Any, Optional
+import boto3
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from mangum import Mangum
-from google_health_client import log_workout_to_google_health
-from hevy_client import fetch_workout
-from slack_client import post_workout_to_slack, post_message_to_slack
+from google_health_client import log_workout_to_google_health, fetch_biometrics
+from hevy_client import fetch_workout, list_recent_workouts
+from slack_client import (
+    post_workout_to_slack,
+    post_message_to_slack,
+    post_agent_reply,
+)
+from claude_client import fitness_agent
+
+GOAL_SSM_PARAMETER_NAME = os.environ.get("GOAL_SSM_PARAMETER_NAME", "/fitsync/goal")
 
 app = FastAPI(title="Hevy to Google Health Sync Webhook")
 
@@ -44,10 +54,10 @@ class SlackEvent(BaseModel):
 
 
 @app.post("/messages")
-async def receive_message(payload: SlackEvent):
+async def receive_message(request: Request, payload: SlackEvent):
     """
     Slack Events API endpoint.
-    Handles the one-time url_verification handshake and any future event callbacks.
+    Handles url_verification handshake and app_mention events.
     """
     print(json.dumps({
         "event": "slack.event_received",
@@ -55,12 +65,60 @@ async def receive_message(payload: SlackEvent):
         "payload": payload.model_dump(exclude_none=True),
     }))
 
-    # Slack url_verification handshake — echo the challenge back as plain text.
     if payload.type == "url_verification":
         return PlainTextResponse(content=payload.challenge or "")
 
-    # event_callback or anything else — acknowledge with 200 so Slack doesn't retry.
-    post_message_to_slack("message aya hai")
+    # Slack retries if no 200 within 3 seconds — ignore retries to avoid double replies.
+    if request.headers.get("X-Slack-Retry-Num"):
+        return {"ok": True}
+
+    inner = payload.event or {}
+    if inner.get("type") == "app_mention":
+        raw_text = inner.get("text", "")
+        question = re.sub(r"<@[A-Z0-9]+>", "", raw_text).strip()
+        channel = inner.get("channel", "")
+        thread_ts = inner.get("ts", "")
+
+        print(json.dumps({
+            "event": "agent.mention_received",
+            "channel": channel,
+            "question": question,
+        }))
+
+        try:
+            ssm = boto3.client("ssm")
+            goal = ssm.get_parameter(
+                Name=GOAL_SSM_PARAMETER_NAME, WithDecryption=True
+            )["Parameter"]["Value"]
+        except Exception as e:
+            print(json.dumps({"event": "agent.ssm_error", "error": str(e)}))
+            goal = ""
+
+        try:
+            workouts = list_recent_workouts(limit=10)
+        except Exception as e:
+            print(json.dumps({"event": "agent.hevy_error", "error": str(e)}))
+            workouts = []
+
+        try:
+            biometrics = fetch_biometrics(days=7)
+        except Exception as e:
+            print(json.dumps({"event": "agent.biometrics_error", "error": str(e)}))
+            biometrics = {"weight": [], "resting_heart_rate": [], "hrv": [], "sleep": []}
+
+        try:
+            reply = fitness_agent(question, goal, workouts, biometrics)
+            print(json.dumps({"event": "agent.claude_success", "chars": len(reply)}))
+        except Exception as e:
+            print(json.dumps({"event": "agent.claude_error", "error": str(e)}))
+            reply = "Sorry, I ran into an error fetching your data. Try again in a moment."
+
+        try:
+            post_agent_reply(reply, channel, thread_ts)
+            print(json.dumps({"event": "agent.reply_posted", "channel": channel}))
+        except Exception as e:
+            print(json.dumps({"event": "agent.reply_error", "error": str(e)}))
+
     return {"ok": True}
 
 @app.post("/webhook")
