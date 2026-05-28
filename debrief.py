@@ -38,7 +38,7 @@ def handler(event, context):
         }))
     except Exception as e:
         print(json.dumps({"event": "debrief.biometrics_error", "error": str(e)}))
-        biometrics = {"weight": [], "resting_heart_rate": [], "hrv": []}
+        biometrics = {"weight": [], "resting_heart_rate": [], "hrv": [], "sleep": []}
 
     try:
         text = weekly_debrief(goal, workouts, biometrics)

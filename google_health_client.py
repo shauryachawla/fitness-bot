@@ -139,6 +139,7 @@ _BIOMETRIC_DATA_TYPES = {
     "weight":             ("weight",                   "weight.sample_time.physical_time",                   "iso"),
     "resting_heart_rate": ("daily-resting-heart-rate", "daily_resting_heart_rate.date",                      "date"),
     "hrv":                ("heart-rate-variability",   "heart_rate_variability.sample_time.physical_time",   "iso"),
+    "sleep":              ("sleep",                    "sleep.interval.end_time",                            "iso"),
 }
 
 
