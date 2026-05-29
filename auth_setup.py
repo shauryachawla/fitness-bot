@@ -1,8 +1,10 @@
+import json
 import urllib.parse
 import urllib.request
-import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
 import boto3
+
 from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SSM_PARAMETER_NAME
 
 CLIENT_ID = GOOGLE_CLIENT_ID

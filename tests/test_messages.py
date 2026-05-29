@@ -1,11 +1,12 @@
 """Tests for the /messages endpoint agent flow."""
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import json
+import os
+import sys
 from unittest.mock import MagicMock, patch
+
 from fastapi.testclient import TestClient
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Patch external deps before importing main so module-level clients don't fail
 with patch("anthropic.Anthropic"), patch("boto3.client"):

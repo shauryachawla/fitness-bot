@@ -1,5 +1,6 @@
 """Quick test to verify biometric data fetching from Google Health API."""
 import json
+
 from clients.google_health import fetch_biometrics
 
 data = fetch_biometrics(days=7)

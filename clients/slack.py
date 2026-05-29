@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+
 import requests
+
 from config import SLACK_BOT_TOKEN, SLACK_CHANNEL
 
 SLACK_API_URL = "https://slack.com/api/chat.postMessage"

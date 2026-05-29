@@ -17,10 +17,15 @@ Hevy → POST /webhook → FastAPI → Google Health API v4
 
 | File | Description |
 |---|---|
-| [main.py](main.py) | FastAPI app — `POST /webhook` handler + `GET /` health check. Wrapped with Mangum for Lambda. |
-| [google_health_client.py](google_health_client.py) | Token refresh from SSM + Google Health API v4 call. |
+| [main.py](main.py) | FastAPI app — `POST /webhook` handler, `POST /messages` (Slack), + `GET /` health check. Wrapped with Mangum for Lambda. |
+| [clients/google_health.py](clients/google_health.py) | Token refresh from SSM, Google Health API v4 calls, biometrics fetching. |
+| [clients/hevy.py](clients/hevy.py) | Hevy API client for fetching workouts and listing recent workouts. |
+| [clients/slack.py](clients/slack.py) | Slack API client for posting messages and formatted workout summaries. |
+| [clients/claude.py](clients/claude.py) | Anthropic client for fitness agent and weekly debrief. |
+| [models.py](models.py) | Pydantic models (e.g., `SlackEvent`). |
+| [config.py](config.py) | Environment variable configuration. |
 | [auth_setup.py](auth_setup.py) | One-time local OAuth flow to obtain and store the refresh token in SSM. |
-| [template.yaml](template.yaml) | AWS SAM template — deploys a Python 3.11 Lambda behind API Gateway. |
+| [template.yaml](template.yaml) | AWS SAM template — deploys a Python 3.14 Lambda behind API Gateway. |
 
 ## Prerequisites
 
@@ -34,7 +39,12 @@ Hevy → POST /webhook → FastAPI → Google Health API v4
 |---|---|---|---|
 | `GOOGLE_CLIENT_ID` | Yes | — | OAuth 2.0 client ID from Google Cloud |
 | `GOOGLE_CLIENT_SECRET` | Yes | — | OAuth 2.0 client secret |
-| `SSM_PARAMETER_NAME` | No | `/fitsync/google_health_refresh_token` | SSM parameter name for the refresh token |
+| `SSM_PARAMETER_NAME` | No | `/fitsync/google_health_refresh_token` | SSM parameter name for the Google Health refresh token |
+| `HEVY_API_KEY` | Yes | — | Hevy API key for fetching workout data |
+| `SLACK_BOT_TOKEN` | Yes | — | Slack bot token for posting messages |
+| `SLACK_CHANNEL` | Yes | — | Slack channel ID for posting workouts and debrief |
+| `ANTHROPIC_API_KEY` | Yes | — | Anthropic API key for Claude |
+| `GOAL_SSM_PARAMETER_NAME` | No | `/fitsync/goal` | SSM parameter name for the fitness goal |
 
 Create a `.env` file in the project root:
 
@@ -42,6 +52,11 @@ Create a `.env` file in the project root:
 GOOGLE_CLIENT_ID=your-client-id
 GOOGLE_CLIENT_SECRET=your-client-secret
 SSM_PARAMETER_NAME=/fitsync/google_health_refresh_token
+HEVY_API_KEY=your-hevy-api-key
+SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+SLACK_CHANNEL=C123456789
+ANTHROPIC_API_KEY=sk-ant-your-api-key
+GOAL_SSM_PARAMETER_NAME=/fitsync/goal
 ```
 
 ## Setup (one-time)
@@ -71,12 +86,18 @@ Open the printed URL in a browser, complete the Google consent screen, and the s
 uvicorn main:app --reload --port 8000
 ```
 
-Test with a sample webhook:
+Test with a sample webhook (note: Hevy sends just the `workoutId`, and the app fetches the full workout):
 
 ```bash
 curl -X POST http://127.0.0.1:8000/webhook \
   -H "Content-Type: application/json" \
-  -d '{"event_type":"workout_created","workout":{"start_time":"2026-05-21T12:00:00Z","duration_seconds":3600,"title":"Gym Session"}}'
+  -d '{"workoutId":"your-hevy-workout-id"}'
+```
+
+Or use the canned event with SAM:
+
+```bash
+sam build && sam local invoke FitSyncFunction -e events/webhook_workout_created.json
 ```
 
 The app also exposes `GET /` as a health check that returns `{"status": "ok"}`.
@@ -93,7 +114,7 @@ sam deploy --guided
 SAM will prompt for `GoogleClientId`, `GoogleClientSecret`, and `SsmParameterName`. The Lambda function is granted `ssm:GetParameter` and `ssm:PutParameter` on the configured SSM parameter. The deployed API Gateway URL is printed in the stack outputs.
 
 **Lambda configuration (template.yaml):**
-- Runtime: Python 3.11
+- Runtime: Python 3.14
 - Timeout: 30 seconds
 - Architecture: x86_64
 - Handler: `main.handler`

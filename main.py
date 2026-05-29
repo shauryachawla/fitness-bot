@@ -1,54 +1,20 @@
 import json
 import re
 import time
-from typing import Any, Optional
+
 import boto3
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
 from mangum import Mangum
-from clients.google_health import log_workout_to_google_health, fetch_biometrics
-from clients.hevy import fetch_workout, list_recent_workouts
-from clients.slack import (
-    post_workout_to_slack,
-    post_message_to_slack,
-    post_agent_reply,
-)
+
 from clients.claude import fitness_agent
+from clients.google_health import fetch_biometrics, log_workout_to_google_health
+from clients.hevy import fetch_workout, list_recent_workouts
+from clients.slack import post_agent_reply, post_workout_to_slack
 from config import GOAL_SSM_PARAMETER_NAME
+from models import SlackEvent
 
 app = FastAPI(title="Hevy to Google Health Sync Webhook")
-
-class SlackEvent(BaseModel):
-    """Slack Events API payload. Fields are optional because the shape varies by event type."""
-    type: str = Field(..., description="Event type, e.g. 'url_verification' or 'event_callback'")
-    token: Optional[str] = Field(None, description="(deprecated) verification token")
-    challenge: Optional[str] = Field(None, description="Challenge string sent during url_verification")
-    team_id: Optional[str] = None
-    api_app_id: Optional[str] = None
-    event: Optional[dict[str, Any]] = Field(None, description="Inner event object for event_callback")
-    event_id: Optional[str] = None
-    event_time: Optional[int] = None
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "type": "url_verification",
-                    "token": "Jhj5dZrVaK7ZwHHjRyZWjbDl",
-                    "challenge": "3eZbrw1aBm2rZgRNFdxV2595E9CY3gmdALWMmHkvFXO7tYXAYM8P",
-                },
-                {
-                    "type": "event_callback",
-                    "team_id": "T0123456789",
-                    "api_app_id": "A0123456789",
-                    "event": {"type": "message", "text": "hello", "user": "U123", "channel": "C123"},
-                    "event_id": "Ev0123456789",
-                    "event_time": 1700000000,
-                },
-            ]
-        }
-    }
 
 
 @app.post("/messages")

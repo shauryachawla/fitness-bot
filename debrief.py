@@ -1,10 +1,11 @@
 import json
 import time
+
 import boto3
 
-from clients.hevy import list_recent_workouts
-from clients.google_health import fetch_biometrics
 from clients.claude import weekly_debrief
+from clients.google_health import fetch_biometrics
+from clients.hevy import list_recent_workouts
 from clients.slack import post_debrief_to_slack
 from config import GOAL_SSM_PARAMETER_NAME
 

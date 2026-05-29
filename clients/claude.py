@@ -1,5 +1,7 @@
 import json
+
 import anthropic
+
 from config import ANTHROPIC_API_KEY
 
 MODEL_DEBRIEF = "claude-sonnet-4-6"
