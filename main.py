@@ -1,5 +1,4 @@
 import json
-import os
 import re
 import time
 from typing import Any, Optional
@@ -8,16 +7,15 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from mangum import Mangum
-from google_health_client import log_workout_to_google_health, fetch_biometrics
-from hevy_client import fetch_workout, list_recent_workouts
-from slack_client import (
+from clients.google_health import log_workout_to_google_health, fetch_biometrics
+from clients.hevy import fetch_workout, list_recent_workouts
+from clients.slack import (
     post_workout_to_slack,
     post_message_to_slack,
     post_agent_reply,
 )
-from claude_client import fitness_agent
-
-GOAL_SSM_PARAMETER_NAME = os.environ.get("GOAL_SSM_PARAMETER_NAME", "/fitsync/goal")
+from clients.claude import fitness_agent
+from config import GOAL_SSM_PARAMETER_NAME
 
 app = FastAPI(title="Hevy to Google Health Sync Webhook")
 

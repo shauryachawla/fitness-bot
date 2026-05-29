@@ -1,14 +1,12 @@
 import json
-import os
 import time
 import boto3
 
-from hevy_client import list_recent_workouts
-from google_health_client import fetch_biometrics
-from claude_client import weekly_debrief
-from slack_client import post_debrief_to_slack
-
-GOAL_SSM_PARAMETER_NAME = os.environ.get("GOAL_SSM_PARAMETER_NAME", "/fitsync/goal")
+from clients.hevy import list_recent_workouts
+from clients.google_health import fetch_biometrics
+from clients.claude import weekly_debrief
+from clients.slack import post_debrief_to_slack
+from config import GOAL_SSM_PARAMETER_NAME
 
 
 def _get_goal_from_ssm() -> str:

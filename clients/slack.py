@@ -1,12 +1,7 @@
-import os
 from datetime import datetime, timezone
 import requests
-from dotenv import load_dotenv
+from config import SLACK_BOT_TOKEN, SLACK_CHANNEL
 
-load_dotenv()
-
-SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
-SLACK_CHANNEL = os.getenv("SLACK_CHANNEL")
 SLACK_API_URL = "https://slack.com/api/chat.postMessage"
 
 

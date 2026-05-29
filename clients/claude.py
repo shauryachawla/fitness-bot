@@ -1,8 +1,7 @@
 import json
-import os
 import anthropic
+from config import ANTHROPIC_API_KEY
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 MODEL_DEBRIEF = "claude-sonnet-4-6"
 MODEL_AGENT = "claude-haiku-4-5-20251001"
 

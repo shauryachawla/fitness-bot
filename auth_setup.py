@@ -1,17 +1,13 @@
-import os
 import urllib.parse
 import urllib.request
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import boto3
-from dotenv import load_dotenv
+from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SSM_PARAMETER_NAME
 
-load_dotenv()
-
-CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+CLIENT_ID = GOOGLE_CLIENT_ID
+CLIENT_SECRET = GOOGLE_CLIENT_SECRET
 REDIRECT_URI = "http://127.0.0.1:8082/callback"
-SSM_PARAMETER_NAME = os.environ.get("SSM_PARAMETER_NAME", "/fitsync/google_health_refresh_token")
 
 # Google Health API granular scopes — writeonly is required to log workouts.
 # Include readonly too so the same token can also fetch existing data if needed.
