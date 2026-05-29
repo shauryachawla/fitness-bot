@@ -95,7 +95,7 @@ async def receive_message(request: Request, payload: SlackEvent):
             goal = ""
 
         try:
-            workouts = list_recent_workouts(limit=10)
+            workouts = list_recent_workouts(limit=5)
         except Exception as e:
             print(json.dumps({"event": "agent.hevy_error", "error": str(e)}))
             workouts = []

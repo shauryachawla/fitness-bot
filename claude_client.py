@@ -3,7 +3,8 @@ import os
 import anthropic
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-MODEL = "claude-sonnet-4-6"
+MODEL_DEBRIEF = "claude-sonnet-4-6"
+MODEL_AGENT = "claude-haiku-4-5-20251001"
 
 _SYSTEM_PERSONA = (
     "You are FitSync, a strength-and-conditioning coach delivering a weekly debrief.\n"
@@ -55,14 +56,17 @@ def weekly_debrief(goal: str, workouts: list[dict], biometrics: dict) -> str:
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     response = client.messages.create(
-        model=MODEL,
-        max_tokens=1500,
+        model=MODEL_DEBRIEF,
+        max_tokens=500,
         system=[
-            {"type": "text", "text": _SYSTEM_PERSONA},
+            {
+                "type": "text",
+                "text": _SYSTEM_PERSONA,
+                "cache_control": {"type": "ephemeral"},
+            },
             {
                 "type": "text",
                 "text": f"User's current fitness goal:\n{goal}",
-                "cache_control": {"type": "ephemeral"},
             },
         ],
         messages=[{"role": "user", "content": _build_user_payload(workouts, biometrics)}],
@@ -94,14 +98,17 @@ def fitness_agent(question: str, goal: str, workouts: list[dict], biometrics: di
     )
 
     response = client.messages.create(
-        model=MODEL,
-        max_tokens=800,
+        model=MODEL_AGENT,
+        max_tokens=300,
         system=[
-            {"type": "text", "text": _AGENT_PERSONA},
+            {
+                "type": "text",
+                "text": _AGENT_PERSONA,
+                "cache_control": {"type": "ephemeral"},
+            },
             {
                 "type": "text",
                 "text": f"User's current fitness goal:\n{goal}",
-                "cache_control": {"type": "ephemeral"},
             },
         ],
         messages=[{"role": "user", "content": user_content}],
