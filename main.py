@@ -11,7 +11,7 @@ from clients.claude import fitness_agent
 from clients.google_health import fetch_biometrics, log_workout_to_google_health
 from clients.hevy import fetch_workout, list_recent_workouts
 from clients.slack import post_agent_reply, post_workout_to_slack
-from config import GOAL_SSM_PARAMETER_NAME
+from config import DEDUP_TABLE_NAME, GOAL_SSM_PARAMETER_NAME
 from models import SlackEvent
 
 app = FastAPI(title="Hevy to Google Health Sync Webhook")
@@ -107,6 +107,18 @@ async def hevy_webhook(request: Request):
     if not workout_id:
         print(json.dumps({"event": "webhook.missing_workout_id"}))
         raise HTTPException(status_code=400, detail="Missing workoutId in payload")
+
+    if DEDUP_TABLE_NAME:
+        dynamodb = boto3.resource("dynamodb")
+        table = dynamodb.Table(DEDUP_TABLE_NAME)
+        try:
+            table.put_item(
+                Item={"workoutId": workout_id, "ttl": int(time.time()) + 86400},
+                ConditionExpression="attribute_not_exists(workoutId)",
+            )
+        except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
+            print(json.dumps({"event": "webhook.duplicate", "workout_id": workout_id}))
+            return {"status": "duplicate", "workout_id": workout_id}
 
     print(json.dumps({"event": "hevy.fetch_started", "workout_id": workout_id}))
     try:
