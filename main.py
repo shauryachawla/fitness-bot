@@ -3,7 +3,7 @@ import re
 import time
 
 import boto3
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from mangum import Mangum
 
@@ -85,13 +85,69 @@ async def receive_message(request: Request, payload: SlackEvent):
 
     return {"ok": True}
 
-@app.post("/webhook")
-async def hevy_webhook(request: Request):
+async def process_workout(workout_id: str):
     """
-    Receives webhook events from Hevy and triggers Google Health sync.
+    Background task to fetch, log, and post workout to Slack.
     """
     start = time.monotonic()
+    workout_title = "<untitled>"
+    
+    try:
+        print(json.dumps({"event": "hevy.fetch_started", "workout_id": workout_id}))
+        workout = fetch_workout(workout_id)
+        
+        workout_title = workout.get("title", "<untitled>")
+        workout_start = workout.get("start_time")
+        print(json.dumps({
+            "event": "sync.started",
+            "workout_id": workout_id,
+            "workout_title": workout_title,
+            "workout_start": workout_start,
+        }))
 
+        result = log_workout_to_google_health(workout)
+        duration_ms = round((time.monotonic() - start) * 1000)
+        print(json.dumps({
+            "event": "sync.success",
+            "workout_id": workout_id,
+            "workout_title": workout_title,
+            "duration_ms": duration_ms,
+        }))
+
+        slack_response = None
+        try:
+            slack_response = post_workout_to_slack(workout)
+            print(json.dumps({
+                "event": "slack.post_success",
+                "workout_id": workout_id,
+                "slack_ts": slack_response.get("ts"),
+                "slack_channel": slack_response.get("channel"),
+            }))
+        except Exception as slack_err:
+            print(json.dumps({
+                "event": "slack.post_error",
+                "workout_id": workout_id,
+                "error": str(slack_err),
+            }))
+
+    except ValueError as e:
+        print(json.dumps({"event": "hevy.fetch_error", "workout_id": workout_id, "error": str(e)}))
+    except Exception as e:
+        duration_ms = round((time.monotonic() - start) * 1000)
+        print(json.dumps({
+            "event": "sync.error",
+            "workout_id": workout_id,
+            "workout_title": workout_title,
+            "error": str(e),
+            "duration_ms": duration_ms,
+        }))
+
+@app.post("/webhook")
+async def hevy_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Receives webhook events from Hevy and triggers Google Health sync.
+    Returns 200 OK immediately, then processes the workout in the background.
+    """
     try:
         payload = await request.json()
     except Exception:
@@ -120,66 +176,9 @@ async def hevy_webhook(request: Request):
             print(json.dumps({"event": "webhook.duplicate", "workout_id": workout_id}))
             return {"status": "duplicate", "workout_id": workout_id}
 
-    print(json.dumps({"event": "hevy.fetch_started", "workout_id": workout_id}))
-    try:
-        workout = fetch_workout(workout_id)
-    except ValueError as e:
-        print(json.dumps({"event": "hevy.fetch_error", "workout_id": workout_id, "error": str(e)}))
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        print(json.dumps({"event": "hevy.fetch_error", "workout_id": workout_id, "error": str(e)}))
-        raise HTTPException(status_code=502, detail=f"Failed to fetch workout from Hevy: {e}")
-
-    workout_title = workout.get("title", "<untitled>")
-    workout_start = workout.get("start_time")
-    print(json.dumps({
-        "event": "sync.started",
-        "workout_id": workout_id,
-        "workout_title": workout_title,
-        "workout_start": workout_start,
-    }))
-
-    try:
-        result = log_workout_to_google_health(workout)
-        duration_ms = round((time.monotonic() - start) * 1000)
-        print(json.dumps({
-            "event": "sync.success",
-            "workout_id": workout_id,
-            "workout_title": workout_title,
-            "duration_ms": duration_ms,
-        }))
-
-        slack_response = None
-        try:
-            slack_response = post_workout_to_slack(workout)
-            print(json.dumps({
-                "event": "slack.post_success",
-                "workout_id": workout_id,
-                "slack_ts": slack_response.get("ts"),
-                "slack_channel": slack_response.get("channel"),
-            }))
-        except Exception as slack_err:
-            print(json.dumps({
-                "event": "slack.post_error",
-                "workout_id": workout_id,
-                "error": str(slack_err),
-            }))
-
-        return {
-            "status": "success",
-            "google_health_response": result,
-            "slack_posted": bool(slack_response and slack_response.get("ok")),
-        }
-    except Exception as e:
-        duration_ms = round((time.monotonic() - start) * 1000)
-        print(json.dumps({
-            "event": "sync.error",
-            "workout_id": workout_id,
-            "workout_title": workout_title,
-            "error": str(e),
-            "duration_ms": duration_ms,
-        }))
-        raise HTTPException(status_code=500, detail=str(e))
+    # Return 200 OK immediately, then process in background
+    background_tasks.add_task(process_workout, workout_id)
+    return {"status": "accepted", "workout_id": workout_id}
 
 @app.get("/")
 def health_check():
