@@ -37,6 +37,17 @@ Parameters:
     Description: SSM parameter name storing the user's current fitness goal
 
 Resources:
+  AgentMemoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
   DeduplicationTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -71,6 +82,7 @@ Resources:
           ANTHROPIC_API_KEY: !Ref AnthropicApiKey
           GOAL_SSM_PARAMETER_NAME: !Ref GoalSsmParameterName
           DEDUP_TABLE_NAME: !Ref DeduplicationTable
+          AGENT_MEMORY_TABLE_NAME: !Ref AgentMemoryTable
       Policies:
         # Give the Lambda function permission to read and update the parameter
         - Version: '2012-10-17'
@@ -88,6 +100,13 @@ Resources:
               Action:
                 - dynamodb:PutItem
               Resource: !GetAtt DeduplicationTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:Scan
+              Resource: !GetAtt AgentMemoryTable.Arn
       Events:
         WebhookEvent:
           Type: Api
@@ -114,6 +133,7 @@ Resources:
           SLACK_CHANNEL: !Ref SlackChannel
           ANTHROPIC_API_KEY: !Ref AnthropicApiKey
           GOAL_SSM_PARAMETER_NAME: !Ref GoalSsmParameterName
+          AGENT_MEMORY_TABLE_NAME: !Ref AgentMemoryTable
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -126,6 +146,11 @@ Resources:
               Action:
                 - ssm:GetParameter
               Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoalSsmParameterName}'
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Scan
+              Resource: !GetAtt AgentMemoryTable.Arn
       Events:
         WeeklySchedule:
           Type: Schedule

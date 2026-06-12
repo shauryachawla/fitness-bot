@@ -12,6 +12,7 @@ from clients.google_health import fetch_biometrics, log_workout_to_google_health
 from clients.hevy import fetch_workout, list_recent_workouts
 from clients.slack import post_agent_reply, post_workout_to_slack
 from config import DEDUP_TABLE_NAME, GOAL_SSM_PARAMETER_NAME
+from memory import get_active_memories
 from models import SlackEvent
 
 app = FastAPI(title="Hevy to Google Health Sync Webhook")
@@ -71,7 +72,13 @@ async def receive_message(request: Request, payload: SlackEvent):
             biometrics = {"weight": [], "resting_heart_rate": [], "hrv": [], "sleep": []}
 
         try:
-            reply = fitness_agent(question, goal, workouts, biometrics)
+            memories = get_active_memories()
+        except Exception as e:
+            print(json.dumps({"event": "agent.memory_error", "error": str(e)}))
+            memories = []
+
+        try:
+            reply = fitness_agent(question, goal, workouts, biometrics, memories)
             print(json.dumps({"event": "agent.claude_success", "chars": len(reply)}))
         except Exception as e:
             print(json.dumps({"event": "agent.claude_error", "error": str(e)}))
