@@ -201,7 +201,7 @@ def fitness_agent(
     while True:
         response = client.messages.create(
             model=MODEL_AGENT,
-            max_tokens=400,
+            max_tokens=1024,
             system=system_blocks,
             tools=_MEMORY_TOOLS,  # type: ignore[arg-type]
             messages=messages,  # type: ignore[arg-type]
@@ -213,7 +213,10 @@ def fitness_agent(
 
         if not tool_use_blocks or response.stop_reason == "end_turn":
             # No more tool calls — return the final text response
-            return "".join(text_blocks)
+            text = "".join(text_blocks)
+            if response.stop_reason == "max_tokens":
+                text += "…"
+            return text
 
         # Append Claude's response (including tool_use blocks) to the conversation
         messages.append({"role": "assistant", "content": response.content})
