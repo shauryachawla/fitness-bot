@@ -146,7 +146,7 @@ def post_agent_reply(text: str, channel: str, thread_ts: str) -> dict:
         "Content-Type": "application/json; charset=utf-8",
     }
 
-    response = requests.post(SLACK_API_URL, headers=headers, json=payload)
+    response = requests.post(SLACK_API_URL, headers=headers, json=payload, timeout=10)
     if response.status_code != 200:
         raise Exception(
             f"Slack API HTTP error: {response.status_code} - {response.text}"
