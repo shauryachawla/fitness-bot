@@ -53,9 +53,11 @@ _AGENT_PERSONA = (
     "You have access to two tools: save_memory and delete_memory.\n"
     "- Call save_memory when the user mentions something worth remembering across sessions "
     "(sickness, injury, travel, life events affecting training).\n"
-    "- Call delete_memory when the user confirms a previously remembered condition is resolved "
-    "(e.g. 'I'm better now', 'injury cleared up'). Match against the active memories provided "
-    "in the system context and delete the most relevant one.\n"
+    "- Call delete_memory ONLY when the user explicitly states a previously remembered condition "
+    "is resolved (e.g. 'I'm better now', 'injury cleared up', 'fully recovered'). "
+    "Do NOT delete a memory just because the user says they are going to work out or exercise — "
+    "that alone is not confirmation the condition is gone. Match against the active memories "
+    "provided in the system context and delete the most relevant one.\n"
     "Always answer the user's question in your final response, even if you called a tool."
 )
 
@@ -83,7 +85,9 @@ _MEMORY_TOOLS = [
     {
         "name": "delete_memory",
         "description": (
-            "Mark an existing memory as inactive when the user confirms the condition has resolved."
+            "Mark an existing memory as inactive when the user explicitly confirms the condition "
+            "has resolved. Requires a clear statement of recovery (e.g. 'I'm better', 'healed up'). "
+            "Do NOT call this just because the user mentions working out or exercising."
         ),
         "input_schema": {
             "type": "object",
