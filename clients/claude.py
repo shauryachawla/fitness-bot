@@ -217,12 +217,12 @@ def fitness_agent(
         text_blocks = [block.text for block in response.content if block.type == "text"]
         tool_use_blocks = [block for block in response.content if block.type == "tool_use"]
 
-        if not tool_use_blocks or response.stop_reason == "end_turn":
-            # No more tool calls — return the final text response
+        if response.stop_reason != "tool_use":
+            # Claude is done — return whatever text it produced
             text = "".join(text_blocks)
             if response.stop_reason == "max_tokens":
                 text += "…"
-            return text
+            return text or "I wasn't able to generate a response. Please try again."
 
         # Append Claude's response (including tool_use blocks) to the conversation
         messages.append({"role": "assistant", "content": response.content})
