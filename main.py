@@ -10,10 +10,10 @@ from mangum import Mangum
 from clients.claude import fitness_agent
 from clients.google_health import fetch_biometrics, log_workout_to_google_health
 from clients.hevy import fetch_workout, list_recent_workouts
-from clients.slack import post_agent_reply, post_workout_to_slack
-from config import DEDUP_TABLE_NAME, GOAL_SSM_PARAMETER_NAME
-from memory import get_active_memories
-from models import SlackEvent
+from clients.slack import get_thread_messages, post_agent_reply, post_workout_to_slack
+from core.config import DEDUP_TABLE_NAME, GOAL_SSM_PARAMETER_NAME
+from core.memory import get_active_memories
+from core.models import SlackEvent
 
 app = FastAPI(title="Hevy to Google Health Sync Webhook")
 
@@ -42,13 +42,19 @@ async def receive_message(request: Request, payload: SlackEvent):
         raw_text = inner.get("text", "")
         question = re.sub(r"<@[A-Z0-9]+>", "", raw_text).strip()
         channel = inner.get("channel", "")
-        thread_ts = inner.get("ts", "")
+        thread_ts = inner.get("thread_ts", inner.get("ts", ""))
 
         print(json.dumps({
             "event": "agent.mention_received",
             "channel": channel,
             "question": question,
         }))
+
+        try:
+            thread_messages = get_thread_messages(channel, thread_ts)
+        except Exception as e:
+            print(json.dumps({"event": "agent.slack_thread_error", "error": str(e)}))
+            thread_messages = []
 
         try:
             ssm = boto3.client("ssm")
@@ -78,7 +84,7 @@ async def receive_message(request: Request, payload: SlackEvent):
             memories = []
 
         try:
-            reply = fitness_agent(question, goal, workouts, biometrics, memories)
+            reply = fitness_agent(question, goal, workouts, biometrics, memories, thread_messages)
             print(json.dumps({"event": "agent.claude_success", "chars": len(reply)}))
         except Exception as e:
             print(json.dumps({"event": "agent.claude_error", "error": str(e)}))

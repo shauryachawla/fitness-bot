@@ -3,7 +3,7 @@ from typing import Any
 
 import anthropic
 
-from config import ANTHROPIC_API_KEY
+from core.config import ANTHROPIC_API_KEY
 
 MODEL_DEBRIEF = "claude-sonnet-4-6"
 MODEL_AGENT = "claude-haiku-4-5-20251001"
@@ -48,7 +48,10 @@ _AGENT_PERSONA = (
     "You are FitSync, a personal strength-and-conditioning assistant. "
     "Answer the user's specific question using their real data. "
     "Be direct and numbers-forward. Target ~150 words. "
-    "Format: Slack mrkdwn (*bold*, _italics_). No preamble, no sign-off.\n"
+    "Format: Slack mrkdwn (*bold*, _italics_). No preamble, no sign-off. "
+    "IMPORTANT: Slack does not render markdown tables (pipes). "
+    "When presenting tabular data, wrap it in a code block (```...```) so it renders in monospace, "
+    "or use a bullet list with *bold* labels instead. Never use raw pipe-delimited markdown tables.\n"
     "\n"
     "You have access to two tools: save_memory and delete_memory.\n"
     "- Call save_memory ONLY to record an ongoing condition (sickness, injury, travel, life event "
@@ -168,12 +171,13 @@ def fitness_agent(
     workouts: list[dict],
     biometrics: dict,
     memories: list[dict] | None = None,
+    thread_messages: list[dict] | None = None,
 ) -> str:
     if not ANTHROPIC_API_KEY:
         raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
 
     # Import here to avoid circular imports at module load time
-    import memory as mem_store
+    import core.memory as mem_store
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -193,7 +197,17 @@ def fitness_agent(
         },
     ]
 
+    thread_history = ""
+    if thread_messages:
+        thread_history = "Slack Thread History:\n"
+        for msg in thread_messages:
+            user_id = msg.get("user") or msg.get("bot_id") or "Unknown"
+            text = msg.get("text", "")
+            thread_history += f"{user_id}: {text}\n"
+        thread_history += "\n"
+
     user_content = (
+        f"{thread_history}"
         f"Question: {question}\n\n"
         f"Recent workouts (most recent first, up to 10):\n"
         f"{json.dumps(workouts, default=str)}\n\n"

@@ -1,37 +1,43 @@
 # FitSync
 
-Syncs workouts from [Hevy](https://www.hevyapp.com/) to Google Health via webhook. When Hevy fires a `workout_created` event, FitSync logs the workout as an exercise data point in the Google Health API.
+A personal fitness assistant that connects [Hevy](https://www.hevyapp.com/), Google Health, Slack, and Claude AI.
+
+## Features
+
+- **Workout sync** — when Hevy fires a `workout_created` webhook, FitSync logs the workout to Google Health and posts a summary to Slack.
+- **Slack agent** — @-mention the bot in Slack to ask training questions. The agent answers using your real workout and biometric data, and can remember ongoing conditions (injury, illness, travel).
+- **Weekly debrief** — every Friday, Claude generates a structured coaching debrief from your workouts and biometrics and posts it to Slack.
 
 ## How it works
 
 ```
-Hevy → POST /webhook → FastAPI → Google Health API v4
+Hevy webhook  →  POST /webhook  →  Google Health + Slack summary
+Slack mention →  POST /messages →  Claude agent  →  Slack reply
+CloudWatch    →  DebriefFunction →  Claude debrief → Slack post
 ```
-
-1. Hevy sends a `workout_created` webhook to the `/webhook` endpoint.
-2. The app extracts the workout's `start_time`, `end_time`/`duration_seconds`, and `title`.
-3. It fetches a Google OAuth refresh token from AWS SSM Parameter Store, exchanges it for an access token, and posts the workout as a `WORKOUT` exercise data point to Google Health.
-4. If Google returns a rotated refresh token, it is saved back to SSM automatically.
 
 ## Project structure
 
-| File | Description |
+| Path | Description |
 |---|---|
-| [main.py](main.py) | FastAPI app — `POST /webhook` handler, `POST /messages` (Slack), + `GET /` health check. Wrapped with Mangum for Lambda. |
+| [main.py](main.py) | FastAPI app — `POST /webhook`, `POST /messages`, `GET /` health check. Wrapped with Mangum for Lambda. |
+| [debrief.py](debrief.py) | Weekly debrief Lambda handler, triggered by CloudWatch schedule (Friday 15:30 UTC). |
 | [clients/google_health.py](clients/google_health.py) | Token refresh from SSM, Google Health API v4 calls, biometrics fetching. |
-| [clients/hevy.py](clients/hevy.py) | Hevy API client for fetching workouts and listing recent workouts. |
-| [clients/slack.py](clients/slack.py) | Slack API client for posting messages and formatted workout summaries. |
-| [clients/claude.py](clients/claude.py) | Anthropic client for fitness agent and weekly debrief. |
-| [models.py](models.py) | Pydantic models (e.g., `SlackEvent`). |
-| [config.py](config.py) | Environment variable configuration. |
-| [auth_setup.py](auth_setup.py) | One-time local OAuth flow to obtain and store the refresh token in SSM. |
-| [template.yaml](template.yaml) | AWS SAM template — deploys a Python 3.14 Lambda behind API Gateway. |
+| [clients/hevy.py](clients/hevy.py) | Hevy API client — fetch workout by ID, list recent workouts. |
+| [clients/slack.py](clients/slack.py) | Slack API client — post workout summaries, debrief, agent replies. |
+| [clients/claude.py](clients/claude.py) | Anthropic client — `fitness_agent()` (Haiku) and `weekly_debrief()` (Sonnet). |
+| [core/config.py](core/config.py) | Environment variable loading. |
+| [core/memory.py](core/memory.py) | DynamoDB CRUD for agent memories. |
+| [core/models.py](core/models.py) | Pydantic models (`SlackEvent`). |
+| [auth_setup.py](auth_setup.py) | One-time local OAuth flow to obtain and store the Google refresh token in SSM. |
+| [template.yaml](template.yaml) | AWS SAM template — two Lambda functions, two DynamoDB tables, API Gateway. |
 
 ## Prerequisites
 
 - Python >= 3.14
 - AWS credentials configured locally (`~/.aws/credentials` or environment variables)
 - A Google Cloud project with the **Google Health API** enabled and an OAuth 2.0 **Web application** client created
+- A Slack app with `chat:write` and `channels:history` bot scopes, subscribed to `app_mention` events
 
 ## Environment variables
 
@@ -39,14 +45,16 @@ Hevy → POST /webhook → FastAPI → Google Health API v4
 |---|---|---|---|
 | `GOOGLE_CLIENT_ID` | Yes | — | OAuth 2.0 client ID from Google Cloud |
 | `GOOGLE_CLIENT_SECRET` | Yes | — | OAuth 2.0 client secret |
-| `SSM_PARAMETER_NAME` | No | `/fitsync/google_health_refresh_token` | SSM parameter name for the Google Health refresh token |
-| `HEVY_API_KEY` | Yes | — | Hevy API key for fetching workout data |
-| `SLACK_BOT_TOKEN` | Yes | — | Slack bot token for posting messages |
-| `SLACK_CHANNEL` | Yes | — | Slack channel ID for posting workouts and debrief |
+| `SSM_PARAMETER_NAME` | No | `/fitsync/google_health_refresh_token` | SSM parameter for the Google Health refresh token |
+| `HEVY_API_KEY` | Yes | — | Hevy API key (requires Hevy Pro for list endpoint) |
+| `SLACK_BOT_TOKEN` | Yes | — | Slack bot token (`xoxb-...`) |
+| `SLACK_CHANNEL` | Yes | — | Slack channel ID for workout summaries and debrief |
 | `ANTHROPIC_API_KEY` | Yes | — | Anthropic API key for Claude |
-| `GOAL_SSM_PARAMETER_NAME` | No | `/fitsync/goal` | SSM parameter name for the fitness goal |
+| `GOAL_SSM_PARAMETER_NAME` | No | `/fitsync/goal` | SSM parameter storing the current fitness goal |
+| `DEDUP_TABLE_NAME` | No | — | DynamoDB table for webhook deduplication (set by SAM) |
+| `AGENT_MEMORY_TABLE_NAME` | No | — | DynamoDB table for agent memories (set by SAM) |
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root for local development:
 
 ```env
 GOOGLE_CLIENT_ID=your-client-id
@@ -69,8 +77,6 @@ In the Google Cloud Console, add the following to **Authorized redirect URIs** f
 http://127.0.0.1:8082/callback
 ```
 
-The required OAuth scope is `https://www.googleapis.com/auth/googlehealth.activity_and_fitness`.
-
 ### 2. Obtain and store the refresh token
 
 ```bash
@@ -78,7 +84,7 @@ pip install -r requirements.txt
 python auth_setup.py
 ```
 
-Open the printed URL in a browser, complete the Google consent screen, and the script will store the refresh token as a `SecureString` in AWS SSM. Your AWS user needs `ssm:PutParameter` permission.
+Open the printed URL in a browser, complete the Google consent screen, and the script stores the refresh token as a `SecureString` in AWS SSM. Your AWS user needs `ssm:PutParameter` permission.
 
 ## Running locally
 
@@ -86,7 +92,7 @@ Open the printed URL in a browser, complete the Google consent screen, and the s
 uvicorn main:app --reload --port 8000
 ```
 
-Test with a sample webhook (note: Hevy sends just the `workoutId`, and the app fetches the full workout):
+Trigger a webhook manually (Hevy sends just the workout ID; the app fetches the full workout):
 
 ```bash
 curl -X POST http://127.0.0.1:8000/webhook \
@@ -94,45 +100,40 @@ curl -X POST http://127.0.0.1:8000/webhook \
   -d '{"workoutId":"your-hevy-workout-id"}'
 ```
 
-Or use the canned event with SAM:
+Or use the canned API Gateway event with SAM:
 
 ```bash
 sam build && sam local invoke FitSyncFunction -e events/webhook_workout_created.json
+sam build && sam local invoke DebriefFunction -e events/scheduled.json
 ```
 
-The app also exposes `GET /` as a health check that returns `{"status": "ok"}`.
+## Running tests
+
+```bash
+pytest tests/
+```
 
 ## Deployment (AWS Lambda)
-
-The app uses [Mangum](https://mangum.io/) to wrap FastAPI for Lambda and includes an AWS SAM template.
 
 ```bash
 sam build
 sam deploy --guided
 ```
 
-SAM will prompt for `GoogleClientId`, `GoogleClientSecret`, and `SsmParameterName`. The Lambda function is granted `ssm:GetParameter` and `ssm:PutParameter` on the configured SSM parameter. The deployed API Gateway URL is printed in the stack outputs.
+SAM prompts for stack parameters on first deploy; subsequent deploys use `samconfig.toml`. The deployed API Gateway URL is printed in the stack outputs.
 
-**Lambda configuration (template.yaml):**
-- Runtime: Python 3.14
-- Timeout: 30 seconds
-- Architecture: x86_64
-- Handler: `main.handler`
+**Deployed resources:**
+- `FitSyncFunction` — Python 3.14, 30 s timeout, API Gateway `/{proxy+}` catch-all
+- `DebriefFunction` — Python 3.14, 60 s timeout, CloudWatch schedule (Friday 15:30 UTC)
+- `DeduplicationTable` — DynamoDB, deduplicates Hevy webhooks (24 h TTL)
+- `AgentMemoryTable` — DynamoDB, stores agent memories
 
-## Webhook payload reference
+## Webhook payload
 
-FitSync ignores all event types except `workout_created`. The minimal expected shape:
+Hevy sends a minimal payload containing only the workout ID:
 
 ```json
-{
-  "event_type": "workout_created",
-  "workout": {
-    "start_time": "2026-05-21T12:00:00Z",
-    "duration_seconds": 3600,
-    "title": "Gym Session"
-  }
-}
+{"workoutId": "abc123"}
 ```
 
-`end_time` is optional — if omitted, it is calculated from `start_time + duration_seconds`.
-
+The app fetches the full workout from the Hevy API using this ID.

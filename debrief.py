@@ -7,8 +7,8 @@ from clients.claude import weekly_debrief
 from clients.google_health import fetch_biometrics
 from clients.hevy import list_recent_workouts
 from clients.slack import post_debrief_to_slack
-from config import GOAL_SSM_PARAMETER_NAME
-from memory import get_active_memories
+from core.config import GOAL_SSM_PARAMETER_NAME
+from core.memory import get_active_memories
 
 
 def _get_goal_from_ssm() -> str:

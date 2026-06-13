@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 import boto3
 import requests
 
-from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SSM_PARAMETER_NAME
+from core.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SSM_PARAMETER_NAME
 
 
 def get_refresh_token_from_ssm():

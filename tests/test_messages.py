@@ -50,6 +50,7 @@ def test_app_mention_replies_in_thread():
          patch("main.list_recent_workouts", return_value=[{"title": "Chest Day"}]), \
          patch("main.fetch_biometrics", return_value={"weight": [], "resting_heart_rate": [], "hrv": [], "sleep": []}), \
          patch("main.fitness_agent", return_value="You had a solid chest day.") as mock_agent, \
+         patch("main.get_thread_messages", return_value=[]), \
          patch("main.post_agent_reply") as mock_reply:
 
         resp = client.post("/messages", json={
@@ -85,6 +86,7 @@ def test_mention_text_stripped():
          patch("main.list_recent_workouts", return_value=[]), \
          patch("main.fetch_biometrics", return_value={}), \
          patch("main.fitness_agent", return_value="ok") as mock_agent, \
+         patch("main.get_thread_messages", return_value=[]), \
          patch("main.post_agent_reply"):
 
         client.post("/messages", json={
@@ -112,6 +114,7 @@ def test_claude_error_posts_fallback():
          patch("main.list_recent_workouts", return_value=[]), \
          patch("main.fetch_biometrics", return_value={}), \
          patch("main.fitness_agent", side_effect=Exception("claude down")), \
+         patch("main.get_thread_messages", return_value=[]), \
          patch("main.post_agent_reply") as mock_reply:
 
         resp = client.post("/messages", json={
@@ -128,7 +131,8 @@ def test_claude_error_posts_fallback():
 # --- non-mention event is a no-op ---
 
 def test_non_mention_event_ignored():
-    with patch("main.post_agent_reply") as mock_reply:
+    with patch("main.get_thread_messages", return_value=[]), \
+         patch("main.post_agent_reply") as mock_reply:
         resp = client.post("/messages", json={
             "type": "event_callback",
             "event": {"type": "message", "text": "hello", "channel": "C1", "ts": "1.0"},

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import requests
 
-from config import SLACK_BOT_TOKEN, SLACK_CHANNEL
+from core.config import SLACK_BOT_TOKEN, SLACK_CHANNEL
 
 SLACK_API_URL = "https://slack.com/api/chat.postMessage"
 
@@ -133,6 +133,30 @@ def post_message_to_slack(text: str) -> dict:
     if not data.get("ok"):
         raise Exception(f"Slack API error: {data.get('error')} - {data}")
     return data
+
+
+
+def get_thread_messages(channel: str, thread_ts: str) -> list[dict]:
+    """Fetch all messages in a Slack thread."""
+    if not SLACK_BOT_TOKEN:
+        raise ValueError("SLACK_BOT_TOKEN environment variable is not set")
+    
+    url = "https://slack.com/api/conversations.replies"
+    params = {"channel": channel, "ts": thread_ts}
+    headers = {
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code != 200:
+        raise Exception(f"Slack API HTTP error: {response.status_code} - {response.text}")
+    
+    data = response.json()
+    if not data.get("ok"):
+        raise Exception(f"Slack API error: {data.get('error')} - {data}")
+    
+    return data.get("messages", [])
 
 
 def post_agent_reply(text: str, channel: str, thread_ts: str) -> dict:

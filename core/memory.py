@@ -4,7 +4,7 @@ import uuid
 import boto3
 from boto3.dynamodb.conditions import Attr
 
-from config import AGENT_MEMORY_TABLE_NAME
+from core.config import AGENT_MEMORY_TABLE_NAME
 
 
 def _get_table():

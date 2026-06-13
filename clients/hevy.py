@@ -1,6 +1,6 @@
 import requests
 
-from config import HEVY_API_KEY
+from core.config import HEVY_API_KEY
 
 HEVY_API_BASE_URL = "https://api.hevyapp.com/v1"
 
