@@ -51,13 +51,14 @@ _AGENT_PERSONA = (
     "Format: Slack mrkdwn (*bold*, _italics_). No preamble, no sign-off.\n"
     "\n"
     "You have access to two tools: save_memory and delete_memory.\n"
-    "- Call save_memory when the user mentions something worth remembering across sessions "
-    "(sickness, injury, travel, life events affecting training).\n"
+    "- Call save_memory ONLY to record an ongoing condition (sickness, injury, travel, life event "
+    "affecting training). Never use save_memory to record that a condition was resolved or cleared — "
+    "that is what delete_memory is for.\n"
     "- Call delete_memory ONLY when the user explicitly states a previously remembered condition "
     "is resolved (e.g. 'I'm better now', 'injury cleared up', 'fully recovered'). "
-    "Do NOT delete a memory just because the user says they are going to work out or exercise — "
-    "that alone is not confirmation the condition is gone. Match against the active memories "
-    "provided in the system context and delete the most relevant one.\n"
+    "Do NOT call delete_memory (or save_memory about resolution) just because the user says they "
+    "are going to work out or exercise — that alone is not confirmation the condition is gone. "
+    "Match against the active memories provided in the system context and delete the most relevant one.\n"
     "Always answer the user's question in your final response, even if you called a tool."
 )
 
@@ -65,8 +66,9 @@ _MEMORY_TOOLS = [
     {
         "name": "save_memory",
         "description": (
-            "Persist a fact about the user's current condition (e.g. illness, injury, life event) "
-            "so it can be recalled in future sessions and weekly debriefs."
+            "Persist a fact about the user's current ongoing condition (e.g. illness, injury, life event) "
+            "so it can be recalled in future sessions and weekly debriefs. "
+            "Only use this for active problems — never to record that a condition was resolved or cleared."
         ),
         "input_schema": {
             "type": "object",
